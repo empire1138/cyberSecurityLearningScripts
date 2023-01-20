@@ -1,9 +1,11 @@
 #!/bin/bash
 
+#Before running the script, download and run dos2unix on the script to ensure it runs correctly. Example :"dos2unix your_copy_aws_script.sh" dos2unix: converting file aws_first_script.sh to Unix format...
+
+
 #make sure you add the aws_access_key_id aws_secret_access_key  aws_session_token to config file .aws/crentials 
 #Or run the commands "aws configure set aws_access_key_id <access-key> --profile default"  "aws configure set aws_secret_access_key <secret-access-key> --profile default" "aws configure set aws_session_token <session-token> --profile default"
 #Make sure the region is set for the aws cli. "aws configure list" will list the region. "aws configure set region us-west-1" will change to region to west-1
-
 
 # Set the region and availability zone
 region="us-west-1"
