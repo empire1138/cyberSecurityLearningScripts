@@ -15,12 +15,16 @@ trap 'echo "An error occurred while running the script. Exiting..."; exit 1' ERR
 # Retrieve the public IP address
 public_ip=$(curl -s https://checkip.dyndns.org | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 
+#Set the type of instance you would like. Here, I am specifying a T2 medium instance.
+instance_type= "t2.medium"
+
 #listed required variable
 #user_ip_public_address
 #user_aws_access_key_id
 #user_aws_secret_access_key
 #user_aws_session_token
 #profile_username
+region="us-west-1"
 
 #Setting the profile name for the user to user
 #read -p "Please Enter the profile name to be used in AWS CLI (default is acceptable):" profile_username
@@ -37,8 +41,12 @@ aws configure set aws_session_token $user_aws_session_token
 aws_account_ID=($(aws sts get-caller-identity --query 'Account' --output text))
 echo "Your Account AWS ID: $aws_account_ID will be used for this script"
 
-# user must enter in the region. Then it checks with the aws cli that the region is correct. if not user has three times to enter a corrcet region before error exit
+# user must enter in the region. Then it checks with the aws cli that the region is correct. if not user has three times to enter a corret region before error exit
 while true; do
+  #print out the list of regions
+  echo " Here is a list of the useable regions for aws. Please select one. The default region is us-west-1"
+  aws ec2 describe-regions --output text --query 'Regions[*].RegionName' | xargs
+
   read -p "Enter the region you want to launch the Kali EC2 instace: " region
   valid_regions=($(aws ec2 describe-regions --output text --query 'Regions[*].RegionName'))
   if echo "${valid_regions[@]}" | grep -q -w "$region"; then
@@ -61,16 +69,15 @@ while true; do
   # Present menu options to the user
   echo "1. Make A Key Pair"
   echo "2. Name A Premade Key Pair"
-  echo "4. Make a Security Group"
-  echo "3. Add the a Premade Secutiy Group" # this will be the session token and other info
-  echo "5. Set Secuity Group Ingress"
-  echo "6. Launch a EC2 Instance"
-  echo "7. Connect to EC2 Instance though ssh"
-  echo "8. Delete EC2 Instance" # make sure to include a print out verifing the delection
-  echo "9. Install Ngrok on EC2 Instance "
-  echo "11. Install missing Pentesting tools"
-  echo "12. Upgrading Kali to Kali large package tool set"
-  echo "13. Exit"
+  echo "3. Make a Security Group"
+  echo "4. Add the a Premade Secutiy Group" # this will be the session token and other info
+  echo "5. Launch a EC2 Instance"
+  echo "6. Connect to EC2 Instance though ssh"
+  echo "7. Delete EC2 Instance" # make sure to include a print out verifing the delection
+  echo "8. Install Ngrok on EC2 Instance "
+  echo "9. Install missing Pentesting tools"
+  echo "10. Upgrading Kali to Kali large package tool set"
+  echo "11. Exit"
 
   # Get user selection
   read -p "Enter your selection: " selection
@@ -93,7 +100,6 @@ while true; do
     #Set read only access for key
     echo "Setting permissions"
     chmod 400 $ssh_key
-    break
     ;;
   2) # Selecting a available Key Pair
     # user must enter A Key pair that is available in thatregion. Then it checks with the aws cli that the keypair is corret. if not user has three times to enter a corret keypair before error exit
@@ -101,8 +107,8 @@ while true; do
       echo "The Available Key pairs for the region: $(aws ec2 describe-key-pairs --filters "Name=key-pair-state,Values=available" --query 'KeyPairs[*].KeyName' --output text | xargs)"
       read -p "Enter the A Key Pair Name: " aws_key_name
       vailid_aws_key_name=($(echo "The Available Key pairs for the region: "aws ec2 describe-key-pairs --filters "Name=key-pair-state,Values=available" --query 'KeyPairs[*].KeyName' --output text))
-      if echo "${vaili_aws_key_name[@]}" | grep -q -w "$aws_key_name"; then
-        echo "Selected Key Pair Name: $(aws_key_name)"
+      if echo "${vailid_aws_key_name[@]}" | grep -q -w "$aws_key_name"; then
+        echo "Selected Key Pair Name: $aws_key_name"
         break
       else
         echo "Invalid Key Pair. Please enter a valid Key Pair"
@@ -114,7 +120,6 @@ while true; do
         fi
       fi
     done
-    break
     ;;
   3) # Making a Secuity Group
 
@@ -145,9 +150,8 @@ while true; do
     fi
 
     # Authorize SSH to the security group. Only computer Public IP Address on traffic on ssh. Public IP Address from https://checkip.dyndns.org
-    echo "Making Ingress for Security Group $aws_kali_sec_group_name On Public Address $public_ip"
+    echo "Making Ingress for Security Group $aws_kali_sec_group_name On Public Address $public_ip for ssh traffic"
     aws ec2 authorize-security-group-ingress --group-name "$aws_kali_sec_group_name" --protocol tcp --port 22 --cidr $public_ip/32 --region "$region"
-    break
     ;;
   4) # Selecting A Premade Secuity group
     while true; do
@@ -166,18 +170,50 @@ while true; do
         if [ $counted_errors -eq $error_limit ]; then
           echo "You have reached the invalid limit, the script will exit now"
           counted_errors=0
-          exit 1
+          break
         fi
       fi
     done
+    ;;
+  5) # Launch the EC2 instance
 
-    break
+    #Grab the Kali AMI ID for the region. This will return the id for the ami kali based on the kali rolling linux.
+    echo "Going to grab the Kali AMI ID for $region"
+    ami_id=($(aws ec2 describe-images --region $region --owners aws-marketplace --filters Name=name,Values=kali-rolling* --query 'Images[*].{ID:ImageId}' --profile default --output json | jq -r '.[].ID'))
+    if [ -z "$ami_id" ]; then
+      echo " Something went wrong grabing the Kail Linux image ID for the $region region "
+      break
+    else
+      echo "The AMI for kali linux is : $ami_id and has be succefully added to the script"
+    fi
+
+    #Instance is set as a goblal constance at the top for m2.medium. Change it up there if you want to different type
+    echo "The instance type for this instance will be: $instance_type"
+
+    #Launch the EC2 Instace #Confirm the EC2 Instace is running and Grab the instace Id
+    # the First run instace made. Just keeping it here in case: aws ec2 run-instances --image-id "$ami_id" --instance-type "$instance_type" --key-name "$aws_key_name" --security-group-names "$aws_kali_sec_group_name" --region "$region"
+    ec2_id=$(aws ec2 run-instances --image-id $ami_id --count 1 --instance-type $instance_type --key-name $aws_key_name --security-group-names "$aws_kali_sec_group_name" --region "$region" --associate-public-ip-address --tag-specifications 'ResourceType=instance,Tags=[{Key=WatchTower,Value="$tag"},{Key=AutomatedID,Value="$uid"}]' | grep InstanceId | cut -d":" -f2 | cut -d'"' -f2)
+
+    #Grab the EC2 Instace Public IP address
+    echo "EC2 Instance ID: $ec2_id"
+    aws_public_ip=$(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].PublicIpAddress' | cut -d'"' -f2)
+    echo -e "Aws Public IP: $aws_public_ip"
     ;;
-  5)
-    # Perform action for option
-    ;;
-  6)
-    # Perform action for option
+  6) #Connect to EC2 instace though ssh
+    echo "Please wait while your instance is being powered on..We are trying to ssh into the EC2 instance"
+    echo "Copy/paste the below command to acess your EC2 instance via SSH from this machine. You may need this later"
+    echo ""
+    echo "\033[0;31m ssh -i $ssh_key kali@$aws_public_ip\033[0m"
+
+    $temp_countdown_timer=${countdown_timer}
+    while [[ ${temp_countdown_timer} -gt 0 ]]; do
+      printf "\rYou have %2d second(s) remaining to hit Ctrl+C to cancel that operation!" ${temp_countdown_timer}
+      sleep 1
+      ((temp_countdown_timer--))
+    done
+    echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
+    ssh -i $ssh_key kali@$aws_public_ip
+
     ;;
   7)
     # Perform action for option
@@ -203,3 +239,4 @@ while true; do
     ;;
   esac
 done
+
