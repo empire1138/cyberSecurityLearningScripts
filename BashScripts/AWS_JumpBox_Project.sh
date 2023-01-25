@@ -1,22 +1,30 @@
 #!/bin/bash
 
+echo -e "\e  
+    ___ _       _______    _____ __________  ________  ______   ____  ____  ____      ____________________
+   /   | |     / / ___/   / ___// ____/ __ \/  _/ __ \/_  __/  / __ \/ __ \/ __ \    / / ____/ ____/_  __/
+  / /| | | /| / /\__ \    \__ \/ /   / /_/ // // /_/ / / /    / /_/ / /_/ / / / /_  / / __/ / /     / /   
+ / ___ | |/ |/ /___/ /   ___/ / /___/ _, _// // ____/ / /    / ____/ _, _/ /_/ / /_/ / /___/ /___  / /    
+/_/  |_|__/|__//____/   /____/\____/_/ |_/___/_/     /_/    /_/   /_/ |_|\____/\____/_____/\____/ /_/   "
+
 #error checking limits
 error_limit=3
 counted_errors=0
 
 #Timer for counters and countdowns
-60_countdown_timer=60
-5_countdown_timer=5
+sixty_countdown_timer=60
+five_countdown_timer=5
 temp_countdown_timer=0
 
 # Error Exit
 trap 'echo "An error occurred while running the script. Exiting..."; exit 1' ERR
 
 # Retrieve the public IP address
-public_ip=$(curl -s https://checkip.dyndns.org | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+public_ip=$(curl -s http://checkip.dyndns.org | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+echo "Your Public IP Address is $public_ip and will be used this this script"
 
 #Set the type of instance you would like. Here, I am specifying a T2 medium instance.
-instance_type= "t2.medium"
+instance_type="t2.medium"
 
 #listed required variable
 #user_ip_public_address
@@ -29,13 +37,26 @@ region="us-west-1"
 #Setting the profile name for the user to user
 #read -p "Please Enter the profile name to be used in AWS CLI (default is acceptable):" profile_username
 
-#Read and set the aws accress keys
-read -p "Please Enter the AWS Access Key ID" user_aws_access_key_id
-aws configure set aws_access_key_id $user_aws_access_key_id
-read -p "Please Enter the AWS Seret Access Key" user_aws_secret_access_key
-aws configure set aws_secret_access_key $user_aws_secret_access_key
-read -p "Please Enter the AWS Session Token" user_aws_session_token
-aws configure set aws_session_token $user_aws_session_token
+#this will check if there is useable keys and sessions tokens already Read and set the aws accress keys
+echo "Checking account info "
+aws sts get-caller-identity &>/dev/null
+if [[ $? -ne 0 ]]; then
+  echo "No current info found Please enter the following infomation"
+  read -p "Please Enter the AWS Access Key ID: " user_aws_access_key_id
+  aws configure set aws_access_key_id $user_aws_access_key_id
+  read -p "Please Enter the AWS Seret Access Key: " user_aws_secret_access_key
+  aws configure set aws_secret_access_key $user_aws_secret_access_key
+  read -p "Please Enter the AWS Session Token: " user_aws_session_token
+  aws configure set aws_session_token $user_aws_session_token
+else
+  echo "Current Account Access found. Will be using found access for this sript."
+  user_id=$(aws sts get-caller-identity | jq -r '.UserId')
+  echo "User ID : $user_id"
+  account=$(aws sts get-caller-identity | jq -r '.Account')
+  echo "Account Number:  $account"
+  arn=$(aws sts get-caller-identity | jq -r '.Arn')
+  echo "ARN: $arn"
+fi
 
 #Getting the AWS ID account Number for later use
 aws_account_ID=($(aws sts get-caller-identity --query 'Account' --output text))
@@ -83,7 +104,7 @@ while true; do
   read -p "Enter your selection: " selection
 
   # Validate user input
-  if [[ ! "$selection" =~ ^[0-13]$ ]]; then
+  if [[ ! "$selection" =~ [0-9]|10|11$ ]]; then
     echo "Invalid selection. Please try again."
     continue
   fi
@@ -106,8 +127,8 @@ while true; do
     while true; do
       echo "The Available Key pairs for the region: $(aws ec2 describe-key-pairs --filters "Name=key-pair-state,Values=available" --query 'KeyPairs[*].KeyName' --output text | xargs)"
       read -p "Enter the A Key Pair Name: " aws_key_name
-      vailid_aws_key_name=($(echo "The Available Key pairs for the region: "aws ec2 describe-key-pairs --filters "Name=key-pair-state,Values=available" --query 'KeyPairs[*].KeyName' --output text))
-      if echo "${vailid_aws_key_name[@]}" | grep -q -w "$aws_key_name"; then
+      valid_aws_key_name=($(aws ec2 describe-key-pairs --filters "Name=key-pair-state,Values=available" --query 'KeyPairs[*].KeyName' --output text))
+      if echo "${valid_aws_key_name[@]}" | grep -q -w "$aws_key_name"; then
         echo "Selected Key Pair Name: $aws_key_name"
         break
       else
@@ -135,7 +156,7 @@ while true; do
     fi
 
     #Enter Name for the secuity group
-    echo -p "Please enter name for the secuity group" aws_kali_sec_group_name
+    read -p "Please enter name for the secuity group: " aws_kali_sec_group_name
 
     #making the secuity group
     aws ec2 create-security-group --group-name "$aws_kali_sec_group_name" --description "Security group for my Kali Linux EC2 instance" --vpc-id "$default_vpc_id" --region "$region"
@@ -157,7 +178,7 @@ while true; do
     while true; do
       echo "The Available Secuity group for the region and AWS Account ID: $(aws ec2 describe-security-groups --region $region --filters "Name=owner-id,Values=$aws_account_ID" --query 'SecurityGroups[*].GroupName' --output text)"
       read -p "Enter a Secuity Group Name: " aws_kali_sec_group_name
-      vailid_aws_kali_sec_group_name=($(echo aws ec2 describe-security-groups --region $region --filters "Name=owner-id,Values=$aws_account_ID" --query 'SecurityGroups[*].GroupName' --output text))
+      vailid_aws_kali_sec_group_name=($(aws ec2 describe-security-groups --region $region --filters "Name=owner-id,Values=$aws_account_ID" --query 'SecurityGroups[*].GroupName' --output text))
       if echo "${vailid_aws_kali_sec_group_name[@]}" | grep -q -w "$aws_kali_sec_group_name"; then
         echo "Selected Secuity Group Name: $aws_kali_sec_group_name"
         # Authorize SSH to the security group. Only computer Public IP Address on traffic on ssh. Public IP Address from https://checkip.dyndns.org
@@ -176,6 +197,14 @@ while true; do
     done
     ;;
   5) # Launch the EC2 instance
+
+    #Need to check that the other req fields aren't empty.
+    if [ -z "$aws_key_name" && "$aws_kali_sec_group_name" ]; then
+      echo "Something went wrong. Go back and do 1 or 2 and 3 or 4 options again"
+      break
+    else
+      echo "The selected Security Group $aws_kali_sec_group_name and Key pair  $aws_key_name"
+    fi
 
     #Grab the Kali AMI ID for the region. This will return the id for the ami kali based on the kali rolling linux.
     echo "Going to grab the Kali AMI ID for $region"
@@ -199,7 +228,7 @@ while true; do
     aws_public_ip=$(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].PublicIpAddress' | cut -d'"' -f2)
     echo -e "Aws Public IP: $aws_public_ip"
     ;;
-  6) #Connect to EC2 instace though ssh
+  6) #Connect to EC2 instace though ssh. This will add a timer before connecting to ec2 on ssh.
     echo "Please wait while your instance is being powered on..We are trying to ssh into the EC2 instance"
     echo "Copy/paste the below command to acess your EC2 instance via SSH from this machine. You may need this later"
     echo ""
@@ -211,15 +240,25 @@ while true; do
       sleep 1
       ((temp_countdown_timer--))
     done
+    temp_countdown_timer=0 #resting the temp countdown time
     echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
     ssh -i $ssh_key kali@$aws_public_ip
 
     ;;
-  7)
-    # Perform action for option
+  7) #Delete the ec2 instace
+    # Confirm the ec2 instance is still up and running
+    aws ec2 describe-instances --instance-ids $ec2_id --output json
+    # Ask the user to confirm delection
+    # Timer for delection
+    # Delection
+    aws ec2 terminate-instances --instance-ids $ec2_id
     ;;
-  8)
-    # Perform action for option
+  8) # Install Ngrok on EC2 Instance
+    # reminded use to have a working ngrok account
+    # Download Ngrok
+    # Unzip Ngrok to a good location
+    # add the auth token to the ngrok.yml config file into the good saved location
+    # turn on ngrok for ssh traffic
     ;;
   9)
     # Perform action for option
