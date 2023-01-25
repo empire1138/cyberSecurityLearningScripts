@@ -95,16 +95,13 @@ while true; do
   echo "5. Launch a EC2 Instance"
   echo "6. Connect to EC2 Instance though ssh"
   echo "7. Delete EC2 Instance" # make sure to include a print out verifing the delection
-  echo "8. Install Ngrok on EC2 Instance "
-  echo "9. Install missing Pentesting tools"
-  echo "10. Upgrading Kali to Kali large package tool set"
-  echo "11. Exit"
+  echo "8. Exit"
 
   # Get user selection
   read -p "Enter your selection: " selection
 
   # Validate user input
-  if [[ ! "$selection" =~ [0-9]|10|11$ ]]; then
+  if [[ ! "$selection" =~ [1-8]$ ]]; then
     echo "Invalid selection. Please try again."
     continue
   fi
@@ -242,8 +239,8 @@ while true; do
     done
     temp_countdown_timer=0 #resting the temp countdown time
     echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
+    # Need to add change to pipe in a new scipt into the ssh connection
     ssh -i $ssh_key kali@$aws_public_ip
-
     ;;
   7) #Delete the ec2 instace
     # Confirm the ec2 instance is still up and running
@@ -253,29 +250,11 @@ while true; do
     # Delection
     aws ec2 terminate-instances --instance-ids $ec2_id
     ;;
-  8) # Install Ngrok on EC2 Instance
-    # reminded use to have a working ngrok account
-    # Download Ngrok
-    # Unzip Ngrok to a good location
-    # add the auth token to the ngrok.yml config file into the good saved location
-    # turn on ngrok for ssh traffic
-    ;;
-  9)
-    # Perform action for option
-    ;;
-  10)
-    # Perform action for option
-    ;;
-  11)
-    # Perform action for option
-    ;;
-  12)
-    # Perform action for option
-    ;;
-  13)
+  8)
     # Exit the program
     exit
     ;;
   esac
 done
+
 
