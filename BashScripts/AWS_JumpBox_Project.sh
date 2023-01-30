@@ -202,19 +202,29 @@ while true; do
 
     #Instance is set as a goblal constance at the top for m2.medium. Change it up there if you want to different type
     echo "The instance type for this instance will be: $instance_type"
-    echo "UID: $uid " 
+    echo "UID: $uid "
 
     #Launch the EC2 Instace #Confirm the EC2 Instace is running and Grab the instace Id
     # the First run instace made. Just keeping it here in case: aws ec2 run-instances --image-id "$ami_id" --instance-type "$instance_type" --key-name "$aws_key_name" --security-group-names "$aws_kali_sec_group_name" --region "$region"
     ec2_id=$(aws ec2 run-instances --image-id $ami_id --count 1 --instance-type $instance_type --key-name $aws_key_name --security-group-ids $aws_kali_sec_group_ID --region $region --associate-public-ip-address --tag-specifications "ResourceType=instance,Tags=[{Key=WatchTower,Value='$tag'},{Key=AutomatedID,Value='$uid'}]" | grep InstanceId | cut -d":" -f2 | cut -d'"' -f2)
     echo "EC2 ID : $ec2_id "
 
+    #ec2 Id Check for empty
+    while [ -z "$ec2_id" ]; do
+      echo "Waiting for EC2 ID"
+      ec2_id=$(aws ec2 describe-instances --filters "Name=tag:AutomatedID,Values=$uid" "Name=tag:WatchTower,Values=$tag" --query 'Reservations[].Instances[].InstanceId' --output text)
+      sleep 1
+    done
+
     #Adding a Delay to the code to wait for the public ip address
     echo "Starting Instance Check "
-    aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].State.Name'
     while [ $(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].State.Name' --output text) != "running" ]; do
-      echo -e "Waiting for instance to start..."
-      sleep 1
+      if [ $(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].State.Name' --output text) != "pending" ]; then
+        sleep 1
+      else
+        echo -e "Waiting for instance to start..."
+        sleep 1
+      fi
     done
 
     #Grab the EC2 Instace Public IP address. Could also change this to use the public DNS instead of the ip address.
@@ -228,7 +238,7 @@ while true; do
     echo ""
     echo "\033[0;31m ssh -i $ssh_key kali@$aws_public_ip\033[0m"
 
-    temp_countdown_timer=${sixty_countdown_timer}
+    temp_countdown_timer=${five_countdown_timer}
     while [[ ${temp_countdown_timer} -gt 0 ]]; do
       printf "\rYou have %2d second(s) remaining to hit Ctrl+C to cancel that operation!" ${temp_countdown_timer}
       sleep 1
@@ -238,7 +248,7 @@ while true; do
     echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
     # Need to add change to pipe in a new scipt into the ssh connection
     #ssh -i $ssh_key kali@$aws_public_ip
-    ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' <pentesting_setup.sh
+    sudo ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' <pentesting_setup.sh
     ;;
   7) #Connect to EC2 Instace though ssh. No pentesting tools
     echo "Please wait while your instance is being powered on..We are trying to ssh into the EC2 instance"
@@ -246,7 +256,7 @@ while true; do
     echo ""
     echo "\033[0;31m ssh -i $ssh_key kali@$aws_public_ip\033[0m"
 
-    temp_countdown_timer=${sixty_countdown_timer}
+    temp_countdown_timer=${five_countdown_timer}
     while [[ ${temp_countdown_timer} -gt 0 ]]; do
       printf "\rYou have %2d second(s) remaining to hit Ctrl+C to cancel that operation!" ${temp_countdown_timer}
       sleep 1
@@ -271,5 +281,3 @@ while true; do
     ;;
   esac
 done
-
-
