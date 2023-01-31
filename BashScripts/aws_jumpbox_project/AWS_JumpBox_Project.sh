@@ -13,6 +13,7 @@ counted_errors=0
 
 #Timer for counters and countdowns
 sixty_countdown_timer=60
+thirty_countdown_timer=30
 five_countdown_timer=5
 temp_countdown_timer=0
 
@@ -95,6 +96,7 @@ while true; do
   echo "6. Connect to EC2 Instance though ssh with pentesting tools install"
   echo "7. Connect to EC2 Instace though ssh. No pentesting tools"
   echo "8. Delete EC2 Instance" # make sure to include a print out verifing the delection
+  # Need to add the pentesting target menu choice and the script. 
   echo "9. Exit"
 
   # Get user selection
@@ -265,7 +267,7 @@ while true; do
     echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
     # Need to add change to pipe in a new scipt into the ssh connection
     #ssh -i $ssh_key kali@$aws_public_ip
-    sudo ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' < pentesting_setup.sh
+    sudo ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' <pentesting_setup.sh
     ;;
   7) #Connect to EC2 Instace though ssh. No pentesting tools
     echo "Please wait while your instance is being powered on..We are trying to ssh into the EC2 instance"
@@ -286,12 +288,43 @@ while true; do
     ;;
   8) #Delete the ec2 instace
     # Confirm the ec2 instance is still up and running
-    aws ec2 describe-instances --instance-ids $ec2_id --output json
+    echo "Below is the ec2 instance started up by this script. Please look and confirm"
+    aws ec2 describe-instances --instance-ids $ec2_id --output text
+
     # Ask the user to confirm delection
-    # Timer for delection
-    # Delection
-    aws ec2 terminate-instances --instance-ids $ec2_id
+    while true; do
+      read -p "Is this the EC2: $ec2_id you want to Delete y/n?" delete_choice
+
+      if [[ ! "$delete_choice" =~ [yY][nN]$ ]]; then
+        echo "Invalid selection. Please try again."
+        continue
+      fi
+
+      case $delete_choice in
+
+      [yY]) #User is selected to delete the ec2 instance that was started in the script 
+
+        # Timer for delection
+        temp_countdown_timer=${thirty_countdown_timer}
+        while [[ ${temp_countdown_timer} -gt 0 ]]; do
+          printf "\rYou have %2d second(s) remaining to hit Ctrl+C to cancel that operation!" ${temp_countdown_timer}
+          sleep 1
+          ((temp_countdown_timer--))
+        done
+        temp_countdown_timer=0 #resting the temp countdown time
+
+        # Delection
+        aws ec2 terminate-instances --instance-ids $ec2_id
+        echo "Instance Deleted EC2 ID: $ec2_id"
+        ;;
+      [nN]) #User is leaveing delete menu
+        echo "Now will return to the main menu"
+        exit
+        ;;
+      esac
+    done
     ;;
+
   9)
     # Exit the program
     exit
