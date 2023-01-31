@@ -122,11 +122,12 @@ while true; do
   2) # Selecting a available Key Pair
     # aws cli will list out the key pair names.User will enter the name.Then it checks with the aws cli that the keypair is corret. if not user has three times to enter a corret keypair before error exit
     while true; do
-      echo "The Available Key pairs for the region: $(aws ec2 describe-key-pairs --key-names  --query 'KeyPairs[].KeyName' --output text)"
+      echo "The Available Key pairs for the region: $(aws ec2 describe-key-pairs --key-names --query 'KeyPairs[].KeyName' --output text)"
       read -p "Enter the A Key Pair Name: " aws_key_name
-      valid_aws_key_name=($(aws ec2 describe-key-pairs --key-names  --query 'KeyPairs[].KeyName' --output text))
+      valid_aws_key_name=($(aws ec2 describe-key-pairs --key-names --query 'KeyPairs[].KeyName' --output text))
       if echo "${valid_aws_key_name[@]}" | grep -q -w "$aws_key_name"; then
         echo "Selected Key Pair Name: $aws_key_name"
+        ssh_key="$aws_key_name.pem"
         break
       else
         echo "Invalid Key Pair. Please enter a valid Key Pair"
@@ -221,8 +222,9 @@ while true; do
 
     #Launch the EC2 Instace #Confirm the EC2 Instace is running and Grab the instace Id
     # the First run instace made. Just keeping it here in case: aws ec2 run-instances --image-id "$ami_id" --instance-type "$instance_type" --key-name "$aws_key_name" --security-group-names "$aws_kali_sec_group_name" --region "$region"
-    ec2_id=$(aws ec2 run-instances --image-id $ami_id --count 1 --instance-type $instance_type --key-name $aws_key_name --security-group-ids $aws_kali_sec_group_ID --region $region --associate-public-ip-address --tag-specifications "ResourceType=instance,Tags=[{Key=WatchTower,Value='$tag'},{Key=AutomatedID,Value='$uid'}]" | grep InstanceId | cut -d":" -f2 | cut -d'"' -f2)
-    echo "EC2 ID : $ec2_id "
+    echo "Lauching EC2 instance...  "
+    ec2_id=$(aws ec2 run-instances --image-id $ami_id --count 1 --instance-type $instance_type --key-name $aws_key_name --security-group-ids $aws_kali_sec_group_ID --region $region --associate-public-ip-address --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30,"DeleteOnTermination":true}}]' --tag-specifications "ResourceType=instance,Tags=[{Key=WatchTower,Value='$tag'},{Key=AutomatedID,Value='$uid'}]" | grep InstanceId | cut -d":" -f2 | cut -d'"' -f2)
+    #echo "EC2 ID : $ec2_id "
 
     #ec2 Id Check for empty
     while [ -z "$ec2_id" ]; do
@@ -232,7 +234,7 @@ while true; do
     done
 
     #Adding a Delay to the code to wait for the public ip address
-    echo "Starting Instance Check "
+    echo "  EC2 ID: $ec2_id Now Starting EC2 Instance Check... "
     while [ $(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].State.Name' --output text) != "running" ]; do
       if [ $(aws ec2 describe-instances --instance-ids $ec2_id --query 'Reservations[0].Instances[0].State.Name' --output text) != "pending" ]; then
         sleep 1
@@ -253,7 +255,7 @@ while true; do
     echo ""
     echo "\033[0;31m ssh -i $ssh_key kali@$aws_public_ip\033[0m"
 
-    temp_countdown_timer=${five_countdown_timer}
+    temp_countdown_timer=${sixty_countdown_timer}
     while [[ ${temp_countdown_timer} -gt 0 ]]; do
       printf "\rYou have %2d second(s) remaining to hit Ctrl+C to cancel that operation!" ${temp_countdown_timer}
       sleep 1
@@ -263,7 +265,7 @@ while true; do
     echo "Trying to connect to EC2 Kali instance at $aws_public_ip"
     # Need to add change to pipe in a new scipt into the ssh connection
     #ssh -i $ssh_key kali@$aws_public_ip
-    sudo ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' <pentesting_setup.sh
+    sudo ssh -o "StrictHostKeyChecking no" -t -i $ssh_key kali@$aws_public_ip 'bash -s' < pentesting_setup.sh
     ;;
   7) #Connect to EC2 Instace though ssh. No pentesting tools
     echo "Please wait while your instance is being powered on..We are trying to ssh into the EC2 instance"
@@ -296,6 +298,4 @@ while true; do
     ;;
   esac
 done
-
-
 
